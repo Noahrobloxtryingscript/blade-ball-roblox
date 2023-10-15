@@ -1,0 +1,156 @@
+--do this script in serverscriptservice the ball needs to be a SPHERE!
+local UserInputService = game:GetService("UserInputService")
+local Players = game:GetService("Players")
+local TweenService = game:GetService("TweenService")
+local SoundService = game:GetService("SoundService")
+local Camera = game.Workspace.CurrentCamera
+ 
+local Ball = game.Workspace.Ball
+local ballSpeed = 15
+local accelerationFactor = 2.1
+local floatForce = Vector3.new(0, 5, 0)
+local blockedPlayers = {}
+local playerTags = {}  
+ 
+local successSoundId = "rbxassetid://7547210322"
+local successSound = Instance.new("Sound")
+successSound.SoundId = successSoundId
+successSound.Parent = Ball
+ 
+local deflectDistanceThreshold = 10 -- Adjust this threshold as needed
+ 
+local function FindClosestPlayerInDirection()
+	local closestPlayer = nil
+	local minDistance = 300
+ 
+	local rayOrigin = Camera.CFrame.Position
+	local rayDirection = Camera.CFrame.LookVector
+ 
+	for _, player in pairs(Players:GetPlayers()) do
+		if not blockedPlayers[player] then
+			local character = player.Character
+			if character then
+				local humanoidRootPart = character:FindFirstChild("HumanoidRootPart")
+				if humanoidRootPart then
+					local position = humanoidRootPart.Position
+					local distance = (rayOrigin - position).Magnitude
+ 
+					local screenPos, onScreen = Camera:WorldToScreenPoint(position)
+					if onScreen and distance < minDistance then
+						minDistance = distance
+						closestPlayer = player
+					end
+				end
+			end
+		end
+	end
+ 
+	return closestPlayer
+end
+ 
+local function DeflectBall(deflectingPlayer)
+	blockedPlayers[deflectingPlayer] = true
+ 
+	local closestPlayer = FindClosestPlayerInDirection()
+	if closestPlayer and closestPlayer ~= deflectingPlayer then
+		local ballToPlayerDirection = (closestPlayer.Character.HumanoidRootPart.Position - Ball.Position).unit
+		local currentSpeed = Ball.Velocity.Magnitude
+		local newSpeed = currentSpeed * accelerationFactor
+		Ball.Velocity = ballToPlayerDirection * newSpeed
+ 
+		successSound:Play()
+	end
+end
+ 
+local function UpdateHighlightColor()
+	local highlight = Ball.Highlight
+	local closestPlayer = FindClosestPlayerInDirection()
+ 
+	if closestPlayer then
+		highlight.FillColor = Color3.fromRGB(255, 0, 0)
+ 
+		if UserInputService:IsKeyDown(Enum.KeyCode.F) then
+			local playerTag = playerTags[closestPlayer]
+			if playerTag and playerTag == "Blocking" then
+				local distanceToPlayer = (closestPlayer.Character.HumanoidRootPart.Position - Ball.Position).Magnitude
+				if distanceToPlayer < deflectDistanceThreshold then
+					DeflectBall(closestPlayer)
+					wait(0.2)
+				end
+			else
+				closestPlayer:Kick("You don't have the blocking tag!")
+			end
+		end
+	else
+		highlight.FillColor = Color3.fromRGB(202, 203, 209)
+	end
+end
+ 
+local function ApplyFloatForce()
+	Ball.Velocity = Ball.Velocity + floatForce
+end
+ 
+local RunService = game:GetService("RunService")
+local function FollowClosestPlayer()
+	local closestPlayer = FindClosestPlayerInDirection()
+ 
+	if closestPlayer then
+		local targetPosition = closestPlayer.Character.HumanoidRootPart.Position
+		local direction = (targetPosition - Ball.Position).unit
+ 
+		local goal = {}
+		goal.Position = Ball.Position + direction * ballSpeed
+ 
+		local tweenInfo = TweenInfo.new((targetPosition - Ball.Position).Magnitude / ballSpeed, Enum.EasingStyle.Linear)
+		local tween = TweenService:Create(Ball, tweenInfo, goal)
+ 
+		local tweenCompleted = false
+		tween.Completed:Connect(function()
+			tweenCompleted = true
+		end)
+ 
+		tween:Play()
+ 
+		while not tweenCompleted do
+			Ball.Velocity = direction * ballSpeed
+			wait(0.05)
+		end
+ 
+		Ball.Velocity = Vector3.new(0, 0, 0)
+	else
+		Ball.Velocity = Vector3.new(0, 0, 0)
+		wait(1)
+	end
+end
+ 
+local function onHit(hit)
+	local character = hit.Parent
+	local humanoidRootPart = character and character:FindFirstChild("HumanoidRootPart")
+ 
+	if humanoidRootPart and not blockedPlayers[hit.Parent.Parent] then
+		local reflectDirection = (Ball.Position - humanoidRootPart.Position).unit
+		Ball.Velocity = reflectDirection * ballSpeed
+	end
+end
+ 
+Players.PlayerAdded:Connect(function(player)
+	player.CharacterAdded:Connect(function()
+		UpdateHighlightColor()
+	end)
+ 
+ 
+	playerTags[player] = ""
+end)
+ 
+Players.PlayerRemoving:Connect(function(player)
+	playerTags[player] = nil
+	blockedPlayers[player] = nil
+end)
+ 
+Ball.Touched:Connect(onHit)
+ 
+while wait() do
+	UpdateHighlightColor()
+	ApplyFloatForce()
+	FollowClosestPlayer()
+end
