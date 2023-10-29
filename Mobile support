@@ -1,0 +1,17 @@
+local uis = game:GetService("UserInputService")
+local remote = game.ReplicatedStorage.Events.WaitForChild("HitBox")
+local swintremote = game.ReplicatedStorage.Events.WaitForChild("SwingRemote")
+local cas = game:GetService("ContextActionService")
+uis.InputBegan:Connect(function(input, gpe)
+if gpe then return end
+if input.KeyCode == Enum.KeyCode.F then
+remote:FireServer(Vector3.new(3,3,3), Vector3.new(2), 10, 0.3)
+Swintremote:FireServer()
+end
+end)
+
+local function blockfunctionformobile()
+remote:FireServer(Vector3.mew(3,3,3), Vector3.new(2), 10, 0.3)
+end
+
+cas:BindAction("mobileblock", blockfunctionformobile, true)
